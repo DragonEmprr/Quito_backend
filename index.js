@@ -2,7 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import nodemailer from "nodemailer";
+import SibApiV3Sdk from "sib-api-v3-sdk";
 
 dotenv.config();
 
@@ -91,107 +91,77 @@ app.post("/order_confirmation", async (req, res) => {
   try {
     const { customer_details, cart, payment_method } = req.body;
 
-    // 🛑 Validate customer details
     if (
-      !customer_details ||
-      !customer_details.name ||
-      !customer_details.address ||
-      !customer_details.phone ||
-      !customer_details.email
+      !customer_details?.name ||
+      !customer_details?.address ||
+      !customer_details?.phone ||
+      !customer_details?.email
     ) {
-      return res.status(400).json({
-        message: "All customer details are required",
-      });
+      return res.status(400).json({ message: "Missing customer details" });
     }
 
-    console.log("yu");
-    
-    // 🛑 Validate cart
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
-      return res.status(400).json({
-        message: "Cart is empty",
-      });
+      return res.status(400).json({ message: "Cart is empty" });
     }
-    console.log("yu");
-    
-    // 📧 Nodemailer transporter
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    });
-    console.log("yu");
-    
-    // 🧾 Build order table
+
+    // 🔑 Brevo setup
+    const client = SibApiV3Sdk.ApiClient.instance;
+    client.authentications["api-key"].apiKey = process.env.BREVO_API_KEY;
+
+    const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+
     const orderItemsHtml = cart
-    .map(
-      (item, index) => `
+      .map(
+        (item, i) => `
           <tr>
-          <td>${index + 1}</td>
-          <td>${item.id}</td>
-          <td>${item.color}</td>
-          <td>${item.size}</td>
-          <td>${item.quantity}</td>
+            <td>${i + 1}</td>
+            <td>${item.id}</td>
+            <td>${item.color}</td>
+            <td>${item.size}</td>
+            <td>${item.quantity}</td>
           </tr>
-          `
-        )
-        .join("");
-        
-    console.log("yu");
-    
-    // ✉️ Email
-    const mailOptions = {
-      from: `"Factory Store" <${process.env.GMAIL_USER}>`,
-      to: customer_details.email,
-      subject: "Order Confirmation – Factory Store",
-      html: `
-        <h2>Thank you for your order, ${customer_details.name}!</h2>
+        `
+      )
+      .join("");
+
+    const emailData = {
+      sender: { name: "Quito", email: process.env.BREVO_API_EMAIL },
+      to: [{ email: customer_details.email, name: customer_details.name }],
+      subject: "Order Confirmed - Factory Store",
+      htmlContent: `
+        <h2>Hi ${customer_details.name},</h2>
+        <p>Your order has been placed successfully.</p>
 
         <p><b>Payment Method:</b> ${payment_method}</p>
 
         <h3>Delivery Details</h3>
         <p>
-          <b>Address:</b> ${customer_details.address}<br/>
-          <b>Phone:</b> ${customer_details.phone}<br/>
-          <b>Email:</b> ${customer_details.email}
+          ${customer_details.address}<br/>
+          Phone: ${customer_details.phone}
         </p>
 
         <h3>Order Items</h3>
-        <table border="1" cellpadding="8" cellspacing="0">
+        <table border="1" cellpadding="8">
           <tr>
             <th>#</th>
             <th>Product ID</th>
             <th>Color</th>
             <th>Size</th>
-            <th>Quantity</th>
+            <th>Qty</th>
           </tr>
           ${orderItemsHtml}
         </table>
 
-        <p>Your order has been placed successfully and will be processed soon.</p>
-        <p><b>Factory Store</b></p>
+        <p>Thank you for shopping with us.</p>
       `,
     };
 
-    console.log("yu");
+    await apiInstance.sendTransacEmail(emailData);
 
-    // 🚀 Send email
-    await transporter.sendMail(mailOptions);
-
-    console.log("yu");
-
-    res.status(200).json({
-      message: "Order confirmed and confirmation email sent",
-    });
-  } catch (error) {
-    console.error("Order confirmation error:", error);
-    res.status(500).json({
-      message: "Failed to confirm order",
-    });
+    res.json({ message: "Order confirmed & email sent" });
+  } catch (err) {
+    console.error("Order confirmation error:", err);
+    res.status(500).json({ message: "Email sending failed" });
   }
 });
 
