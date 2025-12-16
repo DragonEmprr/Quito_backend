@@ -49,12 +49,55 @@ const ProductSchema = new mongoose.Schema(
   { collection: "products" }
 );
 
+const miscDataSchema = new mongoose.Schema(
+  {
+    desktop_images: [String],
+    mobile_images: [String]
+  },
+  {
+    collection: "misc_data" // 👈 IMPORTANT
+  }
+);
+
 const Product = mongoose.model("Product", ProductSchema);
 const Category = mongoose.model("Category", CategorySchema);
+const MiscData = mongoose.model("MiscData", miscDataSchema);
 
 
 
+app.get("/get_desktop_hero_images", async (req, res) => {
+  try {
+    const data = await MiscData.findOne({}, { desktop_images: 1, _id: 0 });
 
+    if (!data || !data.desktop_images) {
+      return res.status(404).json({ message: "Desktop hero images not found" });
+    }
+
+    res.json({
+      images: data.desktop_images
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.get("/get_mobile_hero_images", async (req, res) => {
+  try {
+    const data = await MiscData.findOne({}, { mobile_images: 1, _id: 0 });
+
+    if (!data || !data.mobile_images) {
+      return res.status(404).json({ message: "Mobile hero images not found" });
+    }
+
+    res.json({
+      images: data.mobile_images
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 app.get("/categories", async (req, res) => {
   try {
