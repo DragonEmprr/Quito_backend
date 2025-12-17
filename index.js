@@ -168,7 +168,7 @@ app.post("/order_confirmation", async (req, res) => {
       .join("");
 
     const emailData = {
-      sender: { name: "Quito", email: process.env.BREVO_API_EMAIL },
+      sender: { name: process.env.COMPANY_NAME, email: process.env.BREVO_API_EMAIL },
       to: [{ email: customer_details.email, name: customer_details.name }],
       subject: "Order Confirmed - Factory Store",
       htmlContent: `
@@ -201,12 +201,69 @@ app.post("/order_confirmation", async (req, res) => {
 
     await apiInstance.sendTransacEmail(emailData);
 
+    const emailAdminData = {
+      sender: { name: process.env.COMPANY_NAME, email: process.env.BREVO_API_EMAIL },
+      to: [{ email: process.env.BREVO_API_EMAIL, name: "Store Admin" }],
+      subject: "New Order Placed",
+      htmlContent: `
+        <h2>New Order from ${customer_details.name}</h2>
+        <p><b>Customer Email:</b> ${customer_details.email}</p>
+        <p><b>Delivery Address:</b> ${customer_details.address}</p>
+        <p><b>Phone:</b> ${customer_details.phone}</p>
+        <h3>Order Items</h3>
+        <table border="1" cellpadding="8">
+          <tr>
+            <th>#</th>
+            <th>Product ID</th>
+            <th>Color</th>
+            <th>Size</th>
+            <th>Qty</th>
+          </tr>
+          ${orderItemsHtml}
+        </table>
+      `,
+    };
+
+    await apiInstance.sendTransacEmail(emailAdminData);
+
     res.json({ message: "Order confirmed & email sent" });
   } catch (err) {
     console.error("Order confirmation error:", err);
     res.status(500).json({ message: "Email sending failed" });
   }
 });
+
+app.post("/send_feedback", async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+    if (!name || !message) {
+      return res.status(400).json({ message: "Name and message are required" });
+    }
+    // 🔑 Brevo setup
+    const client = SibApiV3Sdk.ApiClient.instance;
+    client.authentications["api-key"].apiKey = process.env.BREVO_API_KEY;
+
+    const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+
+    const emailData = {
+      sender: { name: process.env.COMPANY_NAME, email: process.env.BREVO_API_EMAIL },
+      to: [{ email: process.env.BREVO_API_EMAIL, name: "Support Team" }],
+      subject: "Feedback from Customer",
+      htmlContent: `
+        <h2>Feedback from ${name}</h2>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Message:</b> ${message}</p>
+      `,
+    };
+
+    await apiInstance.sendTransacEmail(emailData);
+
+    res.json({ message: "Feedback sent successfully" });
+  } catch (err) {
+    console.error("Feedback sending error:", err);
+    res.status(500).json({ message: "Email sending failed" });
+  }
+})
 
 
 const PORT = process.env.PORT || 5000;
